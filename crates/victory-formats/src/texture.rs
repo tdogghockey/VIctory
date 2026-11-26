@@ -405,7 +405,11 @@ impl Layout {
             let mut sizes = vec![];
             for i in 0..d.mips {
                 let (w, h) = padded(i);
-                if w <= fixed[0] && h <= fixed[1] && d.mips - i <= max_in_tail {
+                if w <= fixed[0]
+                    && h <= fixed[1]
+                    && (!thick || mip_depth(i) <= fixed[2])
+                    && d.mips - i <= max_in_tail
+                {
                     first_tail_mip = i;
                     slice_size += block_bytes / u64::from(block[2]);
                     break;
@@ -902,6 +906,11 @@ mod tests {
                 depth: 16,
                 ..desc(64, 32, 7, 4, Swizzle::SW_4KB_S)
             },
+            Desc {
+                dimension: Dimension::Tex3d,
+                depth: 64,
+                ..desc(16, 16, 4, 4, Swizzle::SW_64KB_S)
+            },
         ];
         for d in cases {
             let l = Layout::new(&d).unwrap();
@@ -989,18 +998,20 @@ mod tests {
         assert_eq!(l.mips[0].offset, 8192 + 16384);
     }
 
-    /// A deep narrow volume must not enter the mip tail: the tail block
-    /// cannot hold its slices, however small its width and height are.
+    /// A deep narrow volume enters the tail only once its mip depth fits
+    /// the slab: mips 0 and 1 are 64 and 32 deep, mip 2 is 16 deep.
     #[test]
-    fn deep_3d_mips_stay_out_of_the_tail() {
+    fn deep_3d_mips_enter_the_tail_only_when_their_depth_fits() {
         let d = Desc {
             dimension: Dimension::Tex3d,
             depth: 64,
             ..desc(16, 16, 4, 4, Swizzle::SW_64KB_S)
         };
         let l = Layout::new(&d).unwrap();
-        assert_eq!(l.first_tail_mip, d.mips);
-        assert!(l.mips.iter().all(|m| m.tail.is_none()));
+        assert_eq!(l.first_tail_mip, 2);
+        assert!(l.mips[0].tail.is_none());
+        assert!(l.mips[1].tail.is_none());
+        assert!(l.mips[2].tail.is_some());
     }
 
     #[test]
