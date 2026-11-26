@@ -989,6 +989,20 @@ mod tests {
         assert_eq!(l.mips[0].offset, 8192 + 16384);
     }
 
+    /// A deep narrow volume must not enter the mip tail: the tail block
+    /// cannot hold its slices, however small its width and height are.
+    #[test]
+    fn deep_3d_mips_stay_out_of_the_tail() {
+        let d = Desc {
+            dimension: Dimension::Tex3d,
+            depth: 64,
+            ..desc(16, 16, 4, 4, Swizzle::SW_64KB_S)
+        };
+        let l = Layout::new(&d).unwrap();
+        assert_eq!(l.first_tail_mip, d.mips);
+        assert!(l.mips.iter().all(|m| m.tail.is_none()));
+    }
+
     #[test]
     fn depth_stencil_is_two_planes() {
         let t = Texture::new(&TextureDesc {
